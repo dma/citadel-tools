@@ -10,6 +10,7 @@ const BLOCK_SIZE: usize  = 4096;
 const BLOCKS_PER_MEG: usize = (1024 * 1024) / BLOCK_SIZE;
 const BLOCKS_PER_GIG: usize = 1024 * BLOCKS_PER_MEG;
 
+const E2FSCK: &str = "e2fsck";
 const RESIZE2FS: &str = "resize2fs";
 
 // If less than 1gb remaining space
@@ -89,10 +90,14 @@ impl <'a> ImageResizer<'a> {
         ImageResizer::resize_image_file(self.image.path(), new_nblocks)?;
 
         if let Some(open_loop) = self.notify_open_loops()? {
+            info!("Running e2fsck {:?}", open_loop);
+            cmd!(E2FSCK,"{} {} {}","-f","-p",open_loop.device().display())?;
             info!("Running resize2fs {:?}", open_loop);
             cmd!(RESIZE2FS, "{}", open_loop.device().display())?;
         } else {
             LoopDevice::with_loop(self.image.path(), Some(4096), false, |loopdev| {
+            	info!("Running e2fsck {:?}", loopdev);
+           	cmd!(E2FSCK,"{} {} {}","-f","-p",loopdev.device().display())?;
                 info!("Running resize2fs {:?}", loopdev);
                 cmd!(RESIZE2FS, "{}", loopdev.device().display())?;
                 Ok(())
@@ -139,8 +144,10 @@ impl <'a> ImageResizer<'a> {
         sb.free_block_count();
         let free_blocks = sb.free_block_count() as usize;
         if free_blocks < AUTO_RESIZE_MINIMUM_FREE.nblocks() {
-            let mask = AUTO_RESIZE_INCREASE_SIZE.nblocks() - 1;
-            let grow_blocks = (free_blocks + mask) & !mask;
+	    let increase_multiple = realmfs.metainfo_nblocks() / AUTO_RESIZE_INCREASE_SIZE.nblocks();
+	    let grow_size = (increase_multiple + 1) * AUTO_RESIZE_INCREASE_SIZE.nblocks();
+	    let mask = grow_size - 1;
+	    let grow_blocks = (free_blocks + mask) & !mask;
             Some(ResizeSize::blocks(grow_blocks))
         } else {
             None
