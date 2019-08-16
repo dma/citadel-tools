@@ -60,7 +60,7 @@ pub fn ensure_command_exists(cmd: &str) -> Result<()> {
 
 pub fn sha256<P: AsRef<Path>>(path: P) -> Result<String> {
     let path = path.as_ref();
-    let output = cmd_with_output!("/usr/bin/256sum", "{}", path.display())
+    let output = cmd_with_output!("/usr/bin/sha256sum", "{}", path.display())
         .context(format!("failed to calculate sha256 on {}", path.display()))?;
 
     let v: Vec<&str> = output.split_whitespace().collect();
