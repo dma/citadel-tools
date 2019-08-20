@@ -17,19 +17,31 @@ pub struct DiskPartition {
 }
 
 impl DiskPartition {
+    const ESP_GUID: &'static str = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b";
+
     /// Return list of all vfat partitions on the system as a `Vec<DiskPartition>`
-    pub fn boot_partitions() -> Result<Vec<DiskPartition>> {
+    pub fn boot_partitions(check_guid: bool) -> Result<Vec<DiskPartition>> {
         let pp = fs::read_to_string("/proc/partitions")?;
         let mut v = Vec::new();
         for line in pp.lines().skip(2)
         {
             let part = DiskPartition::from_proc_line(&line)
                 .map_err(|e| format_err!("Failed to parse line '{}': {}", line, e))?;
-            if part.is_vfat()? {
+
+            if part.is_boot_partition(check_guid)? {
                 v.push(part);
             }
         }
         Ok(v)
+    }
+
+    fn is_boot_partition(&self, check_guid: bool) -> Result<bool> {
+        let is_boot = if check_guid {
+            self.is_vfat()? && self.is_esp_guid()?
+        } else {
+            self.is_vfat()?
+        };
+        Ok(is_boot)
     }
 
     // Parse a single line from /proc/partitions
@@ -67,6 +79,11 @@ impl DiskPartition {
         Ok(ok)
     }
 
+    fn is_esp_guid(&self) -> Result<bool> {
+        let ok = self.partition_guid_type()? == Self::ESP_GUID;
+        Ok(ok)
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -80,6 +97,19 @@ impl DiskPartition {
     }
 
     fn partition_fstype(&self) -> Result<String> {
-        cmd_with_output!("/usr/bin/lsblk", "-dno FSTYPE {}", self.path().display())
+        self.lsblk_var("FSTYPE")
+    }
+
+    fn partition_guid_type(&self) -> Result<String> {
+        self.lsblk_var("PARTTYPE")
+    }
+
+    pub fn partition_uuid(&self) -> Result<String> {
+        self.lsblk_var("PARTUUID")
+    }
+
+    /// Execute lsblk to query for a single output column variable on this partition device
+    fn lsblk_var(&self, var: &str) -> Result<String> {
+        cmd_with_output!("/usr/bin/lsblk", "-dno {} {}", var, self.path().display())
     }
 }
