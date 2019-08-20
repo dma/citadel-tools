@@ -112,14 +112,22 @@ impl ResourceImage {
         }
     }
 
-    pub fn mount(&mut self) -> Result<()> {
-        if CommandLine::noverity() {
-            self.mount_noverity()?;
-        } else {
-            self.mount_verity()?;
-        }
 
+    /// Mount resource image at default mount path and process manifest file if it exists
+    pub fn mount(&mut self) -> Result<()> {
+        let _ = self.mount_at(self.mount_path())?;
         self.process_manifest_file()
+    }
+
+    /// Mount resource image at specified path without processing manifest file.
+    /// Returns a ResourceMount object which can be stored and later used to unmount
+    /// the image.
+    pub fn mount_at<P: AsRef<Path>>(&mut self, mount_path: P) -> Result<ResourceMount> {
+        if CommandLine::noverity() {
+            self.mount_noverity(mount_path.as_ref())
+        } else {
+            self.mount_verity(mount_path.as_ref())
+        }
     }
 
     pub fn is_compressed(&self) -> bool {
@@ -175,18 +183,20 @@ impl ResourceImage {
         Ok(())
     }
 
-    fn mount_verity(&self) -> Result<()> {
+    fn mount_verity(&self, mount_path: &Path) -> Result<ResourceMount> {
         let verity_dev = self.setup_verity_device()?;
+        let verity_path = format!("/dev/mapper/{}", verity_dev);
 
-        info!("Mounting dm-verity device to {}", self.mount_path().display());
+        info!("Mounting dm-verity device to {}", mount_path.display());
 
-        fs::create_dir_all(self.mount_path())?;
+        fs::create_dir_all(mount_path)?;
 
-        util::mount(&verity_dev.to_string_lossy(), self.mount_path(), None)
+        util::mount(verity_path, mount_path, None)?;
+        Ok(ResourceMount::new_verity(mount_path, verity_dev))
 
     }
 
-    pub fn setup_verity_device(&self) -> Result<PathBuf> {
+    pub fn setup_verity_device(&self) -> Result<String> {
         if !CommandLine::nosignatures() {
             match self.header.public_key()? {
                 Some(pubkey) => {
@@ -202,9 +212,7 @@ impl ResourceImage {
         if !self.has_verity_hashtree() {
             self.generate_verity_hashtree()?;
         }
-        let devname = self.verity().setup(&self.metainfo())?;
-        Ok(Path::new("/dev/mapper").join(devname))
-//        verity::setup_image_device(self.path(), &self.metainfo())
+        self.verity().setup(&self.metainfo())
     }
 
     pub fn generate_verity_hashtree(&self) -> Result<()> {
@@ -246,22 +254,23 @@ impl ResourceImage {
 
     // Mount the resource image but use a simple loop mount rather than setting up a dm-verity
     // device for the image.
-    fn mount_noverity(&self) -> Result<()> {
+    fn mount_noverity(&self, mount_path: &Path) -> Result<ResourceMount> {
         info!("loop mounting image to {} (noverity)", self.mount_path().display());
 
         if self.is_compressed() {
             self.decompress()?;
         }
 
-        let mount_path = self.mount_path();
         let loopdev = LoopDevice::create(self.path(), Some(4096), true)?;
 
         info!("Loop device created: {}", loopdev);
         info!("Mounting to: {}", mount_path.display());
 
-        fs::create_dir_all(&mount_path)?;
+        fs::create_dir_all(mount_path)?;
 
-        util::mount(&loopdev.device_str(), mount_path, Some("-oro"))
+        util::mount(&loopdev.device_str(), mount_path, Some("-oro"))?;
+
+        Ok(ResourceMount::new_loop(mount_path, loopdev))
     }
 
     // Return the path at which to mount this resource image.
@@ -491,4 +500,51 @@ fn maybe_add_dir_entry(entry: DirEntry,
     images.push(ResourceImage::new(&path, header));
 
     Ok(())
+}
+
+enum ResourceMountType {
+    Unmounted,
+    Verity(String),
+    Loop(LoopDevice),
+}
+
+pub struct ResourceMount {
+    mountpoint: PathBuf,
+    mounttype: ResourceMountType,
+}
+
+impl ResourceMount {
+    fn new_verity(mountpoint: &Path, dev: String) -> ResourceMount {
+        Self::new(mountpoint, ResourceMountType::Verity(dev))
+    }
+
+    fn new_loop(mountpoint: &Path, loopdev: LoopDevice) -> ResourceMount {
+        Self::new(mountpoint, ResourceMountType::Loop(loopdev))
+    }
+
+    fn new(mountpoint: &Path, mounttype: ResourceMountType) -> ResourceMount {
+        let mountpoint = mountpoint.to_path_buf();
+        ResourceMount {
+            mountpoint, mounttype
+        }
+    }
+
+    pub fn unmount(&mut self) -> Result<()> {
+        match self.mounttype {
+            ResourceMountType::Verity(ref dev) => {
+                util::umount(&self.mountpoint)?;
+                Verity::close_device(dev.as_str())?;
+                self.mounttype = ResourceMountType::Unmounted;
+            },
+            ResourceMountType::Loop(ref loopdev) => {
+                util::umount(&self.mountpoint)?;
+                loopdev.detach()?;
+                self.mounttype = ResourceMountType::Unmounted;
+            },
+            ResourceMountType::Unmounted => {
+                warn!("Resource image is already unmounted from {}", self.mountpoint.display());
+            },
+        }
+        Ok(())
+    }
 }
