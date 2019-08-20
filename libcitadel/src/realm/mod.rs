@@ -9,6 +9,7 @@ pub (crate) mod network;
 pub(crate) mod create;
 pub(crate) mod events;
 mod systemd;
+mod launcher;
 
 pub(crate) use self::network::BridgeAllocator;
 
