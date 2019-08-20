@@ -87,7 +87,7 @@ const FINISH_COMMANDS: &[&str] = &[
 ];
 
 const LOADER_CONF: &str = "\
-default citadel
+default boot
 timeout 5
 ";
 
@@ -290,8 +290,8 @@ impl Installer {
         self.info("Writing /boot/loader/loader.conf")?;
         fs::write(format!("{}/loader/loader.conf", INSTALL_MOUNT), LOADER_CONF)?;
 
-        self.info("Writing /boot/entries/citadel.conf")?;
-        fs::write(format!("{}/loader/entries/citadel.conf", INSTALL_MOUNT),
+        self.info("Writing /boot/entries/boot.conf")?;
+        fs::write(format!("{}/loader/entries/boot.conf", INSTALL_MOUNT),
                   BOOT_CONF.replace("$KERNEL_CMDLINE", KERNEL_CMDLINE))?;
 
         self.copy_artifact("bzImage", INSTALL_MOUNT)?;
