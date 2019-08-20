@@ -89,7 +89,7 @@ impl Verity {
             let name = metainfo.realmfs_name().unwrap_or("unknown");
             format!("verity-realmfs-{}-{}", name, metainfo.verity_tag())
         } else {
-            format!("verity-{}", metainfo.image_type())
+            format!("verity-{}-{}", metainfo.image_type(), metainfo.verity_tag())
         }
     }
 
