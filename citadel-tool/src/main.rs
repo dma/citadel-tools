@@ -15,6 +15,7 @@ mod install;
 mod mkimage;
 mod realmfs;
 mod sync;
+mod update;
 
 fn main() {
     let exe = match env::current_exe() {
@@ -34,6 +35,8 @@ fn main() {
         image::main(args);
     } else if exe == Path::new("/usr/bin/citadel-realmfs") {
         realmfs::main(args);
+    } else if exe == Path::new("/usr/bin/citadel-update") {
+        update::main(args);
     } else if exe == Path::new("/usr/libexec/citadel-desktop-sync") {
         sync::main(args);
     } else if exe == Path::new("/usr/libexec/citadel-run") {
@@ -54,6 +57,7 @@ fn dispatch_command(args: Vec<String>) {
             "install" => install::main(rebuild_args("citadel-install", args)),
             "image" => image::main(rebuild_args("citadel-image", args)),
             "realmfs" => realmfs::main(rebuild_args("citadel-realmfs", args)),
+            "update" => update::main(rebuild_args("citadel-update", args)),
             "mkimage" => mkimage::main(rebuild_args("citadel-mkimage", args)),
             "sync" => sync::main(rebuild_args("citadel-desktop-sync", args)),
             "run" => do_citadel_run(rebuild_args("citadel-run", args)),
