@@ -92,8 +92,8 @@ timeout 5
 ";
 
 const BOOT_CONF: &str = "\
-title Subgraph OS (Citadel)
-linux /bzImage
+title Subgraph OS (Citadel $KERNEL_VERSION)
+linux /bzImage-$KERNEL_VERSION
 options root=/dev/mapper/rootfs $KERNEL_CMDLINE
 ";
 
@@ -176,8 +176,9 @@ impl Installer {
 
     pub fn verify(&self) -> Result<()> {
         let kernel_img = self.kernel_imagename();
+        let bzimage = format!("bzImage-{}", self.kernel_version());
         let artifacts = vec![
-            "bootx64.efi", "bzImage",
+            "bootx64.efi", bzimage.as_str(),
             kernel_img.as_str(), EXTRA_IMAGE_NAME,
         ];
 
@@ -290,11 +291,15 @@ impl Installer {
         self.info("Writing /boot/loader/loader.conf")?;
         fs::write(format!("{}/loader/loader.conf", INSTALL_MOUNT), LOADER_CONF)?;
 
+        let kernel_version = self.kernel_version();
         self.info("Writing /boot/entries/boot.conf")?;
-        fs::write(format!("{}/loader/entries/boot.conf", INSTALL_MOUNT),
-                  BOOT_CONF.replace("$KERNEL_CMDLINE", KERNEL_CMDLINE))?;
+        fs::write(format!("{}/loader/entries/boot.conf", INSTALL_MOUNT), BOOT_CONF
+                      .replace("$KERNEL_CMDLINE", KERNEL_CMDLINE)
+                      .replace("$KERNEL_VERSION", &kernel_version)
+        )?;
 
-        self.copy_artifact("bzImage", INSTALL_MOUNT)?;
+        let kernel_bzimage = format!("bzImage-{}", kernel_version);
+        self.copy_artifact(&kernel_bzimage, INSTALL_MOUNT)?;
         self.copy_artifact("bootx64.efi", format!("{}/EFI/BOOT", INSTALL_MOUNT))?;
 
         if self.install_syslinux {
@@ -306,7 +311,6 @@ impl Installer {
         if self.install_syslinux {
             self.setup_syslinux_post_umount()?;
         }
-
         Ok(())
     }
 
@@ -488,10 +492,14 @@ impl Installer {
         }
     }
 
-    fn kernel_imagename(&self) -> String {
+    fn kernel_version(&self) -> String {
         let utsname = UtsName::uname();
         let v = utsname.release().split('-').collect::<Vec<_>>();
-        format!("citadel-kernel-{}.img", v[0])
+        v[0].to_string()
+    }
+
+    fn kernel_imagename(&self) -> String {
+        format!("citadel-kernel-{}.img", self.kernel_version())
     }
 
     fn target_partition(&self, num: usize) -> String {

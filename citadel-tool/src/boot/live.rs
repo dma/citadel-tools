@@ -5,7 +5,7 @@ use std::fs;
 use std::thread::{self,JoinHandle};
 use std::time::{self,Instant};
 
-use libcitadel::Result;
+use libcitadel::{Result, UtsName};
 use libcitadel::ResourceImage;
 use crate::boot::disks;
 use crate::boot::rootfs::setup_rootfs_resource;
@@ -47,7 +47,7 @@ fn try_copy_artifacts() -> Result<bool> {
         deploy_artifacts()?;
         return Ok(true);
     }
-    for part in disks::DiskPartition::boot_partitions()? {
+    for part in disks::DiskPartition::boot_partitions(false)? {
         part.mount("/boot")?;
 
         if rootfs_image.exists() {
@@ -58,6 +58,12 @@ fn try_copy_artifacts() -> Result<bool> {
         part.umount()?;
     }
     Ok(false)
+}
+
+fn kernel_version() -> String {
+    let utsname = UtsName::uname();
+    let v = utsname.release().split('-').collect::<Vec<_>>();
+    v[0].to_string()
 }
 
 fn deploy_artifacts() -> Result<()> {
@@ -72,8 +78,12 @@ fn deploy_artifacts() -> Result<()> {
         println!("Copying {:?} from /boot/images to /run/citadel/images", entry.file_name());
         fs::copy(entry.path(), run_images.join(entry.file_name()))?;
     }
-    println!("Copying bzImage to /run/citadel/images");
-    fs::copy("/boot/bzImage", "/run/citadel/images/bzImage")?;
+
+    let kv = kernel_version();
+    println!("Copying bzImage-{} to /run/citadel/images", kv);
+    let from = format!("/boot/bzImage-{}", kv);
+    let to = format!("/run/citadel/images/bzImage-{}", kv);
+    fs::copy(from, to)?;
 
     println!("Copying bootx64.efi to /run/citadel/images");
     fs::copy("/boot/EFI/BOOT/bootx64.efi", "/run/citadel/images/bootx64.efi")?;
