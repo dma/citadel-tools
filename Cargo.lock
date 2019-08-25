@@ -563,6 +563,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "realmsd"
+version = "0.1.0"
+dependencies = [
+ "dbus 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libcitadel 0.1.0",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.1.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"

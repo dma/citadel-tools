@@ -198,6 +198,7 @@ impl RealmManager {
     pub fn start_realm(&self, realm: &Realm) -> Result<()> {
         if realm.is_active() {
             info!("ignoring start request on already running realm '{}'", realm.name());
+            return Ok(());
         }
         info!("Starting realm {}", realm.name());
         self._start_realm(realm, &mut HashSet::new())?;
@@ -266,6 +267,7 @@ impl RealmManager {
     pub fn stop_realm(&self, realm: &Realm) -> Result<()> {
         if !realm.is_active() {
             info!("ignoring stop request on realm '{}' which is not running", realm.name());
+            return Ok(());
         }
 
         info!("Stopping realm {}", realm.name());
@@ -300,6 +302,10 @@ impl RealmManager {
             self.choose_some_current_realm();
         }
         Some(realm)
+    }
+
+    pub fn current_realm(&self) -> Option<Realm> {
+        self.inner_mut().realms.current()
     }
 
     fn choose_some_current_realm(&self) {
