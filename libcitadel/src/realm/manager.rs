@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{Mountpoint, Activation,Result, Realms, RealmFS, Realm, util};
@@ -328,6 +328,28 @@ impl RealmManager {
 
     pub fn realm_by_name(&self, name: &str) -> Option<Realm> {
         self.inner().realms.by_name(name)
+    }
+
+    pub fn realm_by_pid(&self, pid: u32) -> Option<Realm> {
+        match Self::read_realm_name_by_pid(pid) {
+            Ok(name) => self.realm_by_name(name.as_str()),
+            Err(_) => None,
+        }
+    }
+
+    fn read_realm_name_by_pid(pid: u32) -> Result<String> {
+        let run = PathBuf::from(format!("/proc/{}/root/run", pid));
+        let realm_name = run.join("realm-name");
+
+        // ensure that /proc/pid/root/run and /proc/pid/root/run/realm-name
+        // are not symlinks
+        let run_meta = run.symlink_metadata()?;
+        let name_meta = realm_name.symlink_metadata()?;
+        if !run_meta.file_type().is_dir() || !name_meta.file_type().is_file() {
+            bail!("invalid path");
+        }
+        let bytes = fs::read(realm_name)?;
+        Ok(String::from_utf8(bytes)?)
     }
 
     pub fn rescan_realms(&self) -> Result<(Vec<Realm>,Vec<Realm>)> {

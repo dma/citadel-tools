@@ -62,6 +62,10 @@ impl DbusServer {
                 .in_arg(("name", "s"))
                 .in_arg(("args", "as")))
 
+            .add_m(f.method("RealmFromCitadelPid", (), Self::do_pid_to_realm)
+                .in_arg(("pid", "u"))
+                .out_arg(("realm", "s")))
+
             // Signals
             .add_s(f.signal("RealmStarted", ())
                 .arg(("realm", "s")))
@@ -168,6 +172,18 @@ impl DbusServer {
         Ok(vec![m.msg.method_return()])
     }
 
+    fn do_pid_to_realm(m: &MethodInfo) -> MethodResult {
+        let pid = m.msg.read1::<u32>()?;
+        let manager = m.tree.get_data().manager();
+        let ret = m.msg.method_return();
+        let msg = match manager.realm_by_pid(pid) {
+            Some(realm) => ret.append(realm.name()),
+            None => ret.append(""),
+        };
+        Ok(vec![msg])
+    }
+
+
     pub fn start(&self) -> Result<()> {
         let tree = self.build_tree();
         self.connection.register_name(BUS_NAME, NameFlag::ReplaceExisting as u32)?;
@@ -219,6 +235,7 @@ impl DbusServer {
         let member = dbus::Member::new(name).unwrap();
         Message::signal(&path, &iface, &member)
     }
+
 }
 
 /// Wraps a connection instance and only expose the send() method.
