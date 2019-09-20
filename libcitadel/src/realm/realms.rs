@@ -221,7 +221,7 @@ impl Realms {
     // or when adding or removing a realm directory.
     //
     fn realmslock() -> Result<FileLock> {
-        let lockpath = Path::new(Self::BASE_PATH)
+        let lockpath = Path::new("/tmp")
             .join(".realmslock");
 
         FileLock::acquire(lockpath)
