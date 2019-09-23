@@ -52,12 +52,13 @@ fn do_setup() -> Result<()> {
         warn!("Failed to setup keyring: {}", err);
     }
 
-    ResourceImage::mount_image_type("kernel")?;
-    ResourceImage::mount_image_type("extra")?;
 
     if CommandLine::overlay() {
         mount_overlay()?;
     }
+
+    ResourceImage::mount_image_type("kernel")?;
+    ResourceImage::mount_image_type("extra")?;
 
     if !(CommandLine::live_mode() || CommandLine::install_mode()) {
         write_boot_automount()?;
